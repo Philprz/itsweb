@@ -26,15 +26,15 @@ export default function Home() {
 
   const handleSearch = async () => {
     if (!query) {
-      setError('Veuillez entrer une requête de recherche')
-      return
+      setError('Veuillez entrer une requête de recherche');
+      return;
     }
-
-    setIsLoading(true)
-    setError('')
-
+    setIsLoading(true);
+    setError('');
+  
     try {
       console.log('Envoi de la requête:', { query, client, erp, format, recentOnly, limit: parseInt(limit) });
+  
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: {
@@ -42,31 +42,41 @@ export default function Home() {
         },
         body: JSON.stringify({
           query,
-          client: client === 'none' ? '' : client,
-          erp: erp === 'none' ? '' : erp,
+          client,
+          erp,
           format,
           recentOnly,
           limit: parseInt(limit),
         }),
-      })
+      });
+  
       console.log('Statut de la réponse:', response.status);
-
-      const data = await response.json()
-
+  
       if (!response.ok) {
-        throw new Error(data.error || 'Une erreur est survenue lors de la recherche')
+        const errorText = await response.text();
+        console.error('Erreur de réponse:', errorText);
+        throw new Error(`Erreur: ${response.status} ${response.statusText}`);
       }
-
-      setResults(data.content || [])
-      setSources(data.sources || '')
+  
+      const data = await response.json();
+      console.log('Données reçues:', data);
+  
+      setResults(data.content || []);
+      setSources(data.sources || '');
+      setSuggestions(data.suggestions || []);
     } catch (err: any) {
-      setError(err.message)
-      setResults([])
-      setSources('')
+      console.error('Erreur complète:', err);
+      setError(err.message);
+      setResults([]);
+      setSources('');
+      setSuggestions([]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
+  // Ajouter un nouvel état pour les suggestions
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -93,7 +103,7 @@ export default function Home() {
         <h1 className="app-title">IT SPIRIT - Système d'Information Qdrant</h1>
         <p className="app-subtitle">Recherchez des informations sur les clients et les systèmes ERP (SAP et NetSuite)</p>
       </header>
-      
+  
       <div className="p-4 sm:p-8">
         <Card className="search-form p-6 mb-8">
           <div className="grid gap-6">
@@ -123,27 +133,21 @@ export default function Home() {
                 </Button>
               </div>
             </div>
-
+  
             <div className="filter-section">
               <h3 className="text-md font-medium mb-3">Filtres</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 filter-grid">
                 <div>
                   <Label htmlFor="client">Client (optionnel)</Label>
-                  <Select value={client} onValueChange={setClient}>
-                    <SelectTrigger id="client">
-                      <SelectValue placeholder="Sélectionner un client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                    <SelectItem value="none">Tous les clients</SelectItem>
-                      <SelectItem value="AZERGO">AZERGO</SelectItem>
-                      <SelectItem value="ADVIGO">ADVIGO</SelectItem>
-                      <SelectItem value="PUR PROJECT">PUR PROJECT</SelectItem>
-                      <SelectItem value="ELECTROSTEEL">ELECTROSTEEL</SelectItem>
-                      <SelectItem value="FORACO">FORACO</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="client"
+                    placeholder="Nom du client..."
+                    value={client}
+                    onChange={(e) => setClient(e.target.value)}
+                    className="text-base"
+                  />
                 </div>
-
+  
                 <div>
                   <Label htmlFor="erp">ERP (optionnel)</Label>
                   <Select value={erp} onValueChange={setErp}>
@@ -151,13 +155,13 @@ export default function Home() {
                       <SelectValue placeholder="Sélectionner un ERP" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Tous les ERP</SelectItem>
+                      <SelectItem value="">Tous les ERP</SelectItem>
                       <SelectItem value="SAP">SAP</SelectItem>
                       <SelectItem value="NetSuite">NetSuite</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
+  
                 <div>
                   <Label htmlFor="limit">Nombre de résultats</Label>
                   <Select value={limit} onValueChange={setLimit}>
@@ -172,7 +176,7 @@ export default function Home() {
                   </Select>
                 </div>
               </div>
-
+  
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div>
                   <Label className="mb-2 block">Format de réponse</Label>
@@ -200,11 +204,11 @@ export default function Home() {
                     </div>
                   </RadioGroup>
                 </div>
-
+  
                 <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="recentOnly" 
-                    checked={recentOnly} 
+                  <Checkbox
+                    id="recentOnly"
+                    checked={recentOnly}
                     onCheckedChange={(checked) => setRecentOnly(checked as boolean)}
                   />
                   <Label htmlFor="recentOnly">Résultats récents uniquement (moins de 6 mois)</Label>
@@ -213,44 +217,123 @@ export default function Home() {
             </div>
           </div>
         </Card>
-
+  
         {error && (
           <Card className="error-message mb-8">
             <p>{error}</p>
           </Card>
         )}
-
-        <ErrorBoundary>
-          {results.length > 0 && (
-            <Card className="results-section">
-              <div className="results-header">
-                <h2 className="results-count">Résultats ({results.length})</h2>
-                
-                {sources && (
-                  <p className="results-sources">
-                    Sources: {sources}
-                  </p>
-                )}
+  
+        {results.length === 0 && suggestions.length > 0 && (
+          <Card className="suggestions-section p-4 mb-8">
+            <h2 className="text-lg font-medium mb-2">Suggestions pour améliorer votre recherche</h2>
+            <ul className="list-disc pl-5 space-y-1">
+              {suggestions.map((suggestion, index) => (
+                <li key={index}>{suggestion}</li>
+              ))}
+            </ul>
+          </Card>
+        )}
+  
+        {results.length > 0 && (
+          <Card className="results-section">
+            <div className="results-header">
+              <h2 className="results-count">Résultats ({results.length})</h2>
+  
+              {sources && (
+                <p className="results-sources">
+                  Sources: {sources}
+                </p>
+              )}
+            </div>
+  
+            <div className="flex items-center mb-4">
+              {getFormatIcon()}
+              <span className="font-medium">Format: {format}</span>
+            </div>
+  
+            <ScrollArea className="h-[500px] pr-4">
+              <div className="space-y-6">
+                {results.map((result, index) => (
+                  <Card key={index} className="result-card p-4">
+                    <div className="whitespace-pre-wrap">{result}</div>
+                  </Card>
+                ))}
               </div>
-
-              <div className="flex items-center mb-4">
-                {getFormatIcon()}
-                <span className="font-medium">Format: {format}</span>
-              </div>
-
-              <ScrollArea className="h-[500px] pr-4">
-                <div className="space-y-6">
-                  {results.map((result, index) => (
-                    <Card key={index} className="result-card p-4">
-                      <div className="whitespace-pre-wrap">{result}</div>
-                    </Card>
-                  ))}
-                </div>
-              </ScrollArea>
-            </Card>
-          )}
-        </ErrorBoundary>
+            </ScrollArea>
+          </Card>
+        )}
       </div>
     </main>
-  )
+  );
+}import { NextRequest, NextResponse } from 'next/server';
+import { QdrantClient } from '@qdrant/js-client-rest';
+
+// Configuration Qdrant (pour usage en mode dégradé si l'API Python est indisponible)
+const QDRANT_URL = process.env.QDRANT_URL;
+const QDRANT_API_KEY = process.env.QDRANT_API_KEY;
+const COLLECTIONS = {
+  "ZENDESK": process.env.QDRANT_COLLECTION_ZENDESK || "ZENDESK",
+  "JIRA": process.env.QDRANT_COLLECTION_JIRA || "JIRA",
+  "CONFLUENCE": process.env.QDRANT_COLLECTION_CONFLUENCE || "CONFLUENCE",
+  "NETSUITE": process.env.QDRANT_COLLECTION_NETSUITE || "NETSUITE",
+  "NETSUITE_DUMMIES": process.env.QDRANT_COLLECTION_NETSUITE_DUMMIES || "NETSUITE_DUMMIES",
+  "SAP": process.env.QDRANT_COLLECTION_SAP || "SAP"
+};
+
+// URL de l'API Python déployée sur Render
+const API_URL = process.env.API_URL || 'https://itshlp.onrender.com';
+
+// Client Qdrant pour mode dégradé
+let qdrantClient: QdrantClient | null = null;
+
+/**
+ * Gestionnaire de la route API
+ * Proxie les requêtes vers l'API Python, avec fallback sur Qdrant en cas d'erreur
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const requestData = await request.json();
+    console.log('Envoi de la requête à l\'API Python:', requestData);
+    
+    // Transmettre la requête à l'API Python
+    const response = await fetch(`${API_URL}/api/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestData),
+    });
+    
+    if (!response.ok) {
+      console.error('Erreur API:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('Détails de l\'erreur:', errorText);
+      
+      // Si l'API Python est indisponible, on essaie de basculer vers une recherche locale
+      // Cette partie pourrait être implémentée en réutilisant le code de la version actuelle
+      // Pour simplifier, on lance simplement l'erreur pour le moment
+      throw new Error(`Erreur API: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Réponse de l\'API Python:', data);
+    
+    // Retourner la réponse de l'API Python
+    return NextResponse.json(data);
+  } catch (error: any) {
+    console.error('Erreur lors du traitement de la requête:', error);
+    
+    return NextResponse.json(
+      {
+        error: error.message || 'Une erreur est survenue lors du traitement de la requête',
+        suggestions: [
+          "Vérifiez votre connexion internet",
+          "Essayez de rafraîchir la page",
+          "Réessayez dans quelques instants"
+        ]
+      },
+      { status: 500 }
+    );
+  }
 }

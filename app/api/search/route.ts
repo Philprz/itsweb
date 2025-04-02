@@ -13,8 +13,12 @@ const COLLECTIONS = {
   "NETSUITE_DUMMIES": process.env.QDRANT_COLLECTION_NETSUITE_DUMMIES || "NETSUITE_DUMMIES",
   "SAP": process.env.QDRANT_COLLECTION_SAP || "SAP"
 };
+
 // URL de l'API Python déployée sur Render
 const API_URL = process.env.API_URL || 'https://itshlp.onrender.com';
+
+// Mode de fonctionnement (local ou API)
+const USE_API = process.env.USE_API === 'true' || false;
 
 // Client Qdrant
 let qdrantClient: QdrantClient | null = null;
@@ -83,8 +87,7 @@ async function searchInCollection(
     }
     
     // Filtre par date si recent_only est True
-    // Note: Désactivé pour le prototype car peut causer des erreurs
-    if (false && recentOnly) {
+    if (recentOnly) {
       const sixMonthsAgo = DateTime.now().minus({ months: 6 }).toISODate();
       filterConditions.push({
         key: "created",
@@ -209,45 +212,43 @@ function formatGuide(content: any): string {
   // Implémentation du formatage en guide
   let guide = "";
   
-  // Titre
+  // Titre ou résumé
   if (content.title) {
-    guide += `# Guide: ${content.title}\n\n`;
+    guide += `# ${content.title}\n\n`;
   } else if (content.summary) {
-    guide += `# Guide: ${content.summary}\n\n`;
+    guide += `# ${content.summary}\n\n`;
   }
   
-  // Introduction
+  // Description ou introduction
   if (content.description) {
-    guide += `## Introduction\n${content.description}\n\n`;
+    guide += `${content.description}\n\n`;
+  } else if (content.content && content.content.length < 500) {
+    guide += `${content.content}\n\n`;
   }
   
-  // Contenu principal - on essaie de le structurer en étapes
-  if (content.content) {
-    // On tente de diviser le contenu en étapes
+  // Extraction des étapes si contenu disponible
+  if (content.content && content.content.length > 500) {
     const steps = extractSteps(content.content);
+    
     if (steps.length > 0) {
       guide += "## Étapes à suivre\n\n";
-      steps.forEach((step, i) => {
-        guide += `${i + 1}. ${step}\n`;
+      steps.forEach((step, index) => {
+        guide += `${index + 1}. ${step}\n\n`;
       });
     } else {
-      guide += `## Procédure\n${content.content}\n\n`;
-    }
-  } else if (content.text) {
-    const steps = extractSteps(content.text);
-    if (steps.length > 0) {
-      guide += "## Étapes à suivre\n\n";
-      steps.forEach((step, i) => {
-        guide += `${i + 1}. ${step}\n`;
-      });
-    } else {
-      guide += `## Procédure\n${content.text}\n\n`;
+      // Si pas d'étapes claires, on met le contenu en format détaillé
+      guide += `${content.content}\n\n`;
     }
   }
   
-  // Notes ou conseils
-  if (content.comments) {
-    guide += `\n## Notes et conseils\n${content.comments}\n`;
+  // Informations complémentaires
+  if (content.notes) {
+    guide += `## Notes importantes\n${content.notes}\n\n`;
+  }
+  
+  // Source ou référence
+  if (content.source) {
+    guide += `---\nSource: ${content.source}\n`;
   }
   
   return guide;
@@ -255,63 +256,59 @@ function formatGuide(content: any): string {
 
 // Fonction pour extraire les étapes d'un texte
 function extractSteps(text: string): string[] {
-  // Recherche de patterns comme "1.", "Step 1:", "Étape 1:", etc.
   const steps: string[] = [];
-  const lines = text.split("\n");
   
-  // Patterns possibles pour les étapes
-  const stepPatterns = [
-    /^\d+\./,  // "1."
-    /^Step \d+:/,  // "Step 1:"
-    /^Étape \d+:/,  // "Étape 1:"
-    /^Étape \d+\./,  // "Étape 1."
-  ];
+  // Tentative d'extraction avec numéros (1. 2. 3. etc.)
+  const numberedRegex = /\n\s*(\d+)[\.\)]\s*(.*?)(?=\n\s*\d+[\.\)]|$)/g;
+  let numberedMatch;
   
-  let currentStep = "";
-  let inStep = false;
+  while ((numberedMatch = numberedRegex.exec(text)) !== null) {
+    steps.push(numberedMatch[2].trim());
+  }
+  
+  // Si on a trouvé des étapes numérotées, on les renvoie
+  if (steps.length > 0) {
+    return steps;
+  }
+  
+  // Tentative d'extraction avec puces (• - *)
+  const bulletRegex = /\n\s*[•\-\*]\s*(.*?)(?=\n\s*[•\-\*]|$)/g;
+  let bulletMatch;
+  
+  while ((bulletMatch = bulletRegex.exec(text)) !== null) {
+    steps.push(bulletMatch[1].trim());
+  }
+  
+  // Si on a trouvé des étapes à puces, on les renvoie
+  if (steps.length > 0) {
+    return steps;
+  }
+  
+  // Tentative d'extraction de paragraphes courts
+  const paragraphs: string[] = [];
+  const lines = text.split('\n');
+  let currentPara = "";
   
   for (const line of lines) {
-    const isStepHeader = stepPatterns.some(pattern => pattern.test(line));
+    const trimmedLine = line.trim();
     
-    if (isStepHeader) {
-      if (inStep && currentStep) {
-        steps.push(currentStep.trim());
-      }
-      currentStep = line;
-      inStep = true;
-    } else if (inStep) {
-      currentStep += " " + line;
-    }
-  }
-  
-  // Ajouter la dernière étape
-  if (inStep && currentStep) {
-    steps.push(currentStep.trim());
-  }
-  
-  // Si on n'a pas trouvé d'étapes avec les patterns, on essaie de diviser le texte
-  if (steps.length === 0 && lines.length > 3) {
-    // On divise le texte en paragraphes et on prend chaque paragraphe comme une étape
-    const paragraphs: string[] = [];
-    let currentPara = "";
-    
-    for (const line of lines) {
-      if (line.trim()) {
-        currentPara += line + " ";
-      } else if (currentPara) {
+    if (trimmedLine === "") {
+      if (currentPara) {
         paragraphs.push(currentPara.trim());
         currentPara = "";
       }
+    } else {
+      currentPara += " " + trimmedLine;
     }
-    
-    if (currentPara) {
-      paragraphs.push(currentPara.trim());
-    }
-    
-    // Si on a entre 3 et 10 paragraphes, on les considère comme des étapes
-    if (paragraphs.length >= 3 && paragraphs.length <= 10) {
-      return paragraphs;
-    }
+  }
+  
+  if (currentPara) {
+    paragraphs.push(currentPara.trim());
+  }
+  
+  // Si on a entre 3 et 10 paragraphes, on les considère comme des étapes
+  if (paragraphs.length >= 3 && paragraphs.length <= 10) {
+    return paragraphs;
   }
   
   return steps;
@@ -332,10 +329,45 @@ function isQueryAmbiguous(query: string, clientName: string, erp: string): boole
   return false;
 }
 
+// Fonction pour traiter la requête via l'API Python
+async function processWithAPI(requestData: any) {
+  console.log('Envoi de la requête à l\'API Python:', requestData);
+  
+  // Transmettre la requête à l'API Python
+  const response = await fetch(`${API_URL}/api/search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestData),
+  });
+  
+  if (!response.ok) {
+    console.error('Erreur API:', response.status, response.statusText);
+    const errorText = await response.text();
+    console.error('Détails de l\'erreur:', errorText);
+    throw new Error(`Erreur API: ${response.status} ${response.statusText}`);
+  }
+  
+  const data = await response.json();
+  console.log('Réponse de l\'API Python:', data);
+  
+  return data;
+}
+
 // Gestionnaire de la route API
 export async function POST(request: NextRequest) {
   try {
-    const { query, client, erp, format, recentOnly, limit } = await request.json();
+    const requestData = await request.json();
+    
+    // Si mode API est activé, on délègue tout à l'API Python
+    if (USE_API) {
+      const data = await processWithAPI(requestData);
+      return NextResponse.json(data);
+    }
+    
+    // Sinon, on utilise le traitement local avec Qdrant
+    const { query, client, erp, format, recentOnly, limit } = requestData;
 
     // Vérification des paramètres requis
     if (!query) {
@@ -395,7 +427,14 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Erreur lors du traitement de la requête:', error);
     return NextResponse.json(
-      { error: error.message || 'Une erreur est survenue lors du traitement de la requête' },
+      {
+        error: error.message || 'Une erreur est survenue lors du traitement de la requête',
+        suggestions: [
+          "Vérifiez votre connexion internet",
+          "Essayez de rafraîchir la page",
+          "Réessayez dans quelques instants"
+        ]
+      },
       { status: 500 }
     );
   }
