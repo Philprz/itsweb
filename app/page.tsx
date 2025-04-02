@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function Home() {
   const [query, setQuery] = useState('')
@@ -40,8 +41,8 @@ export default function Home() {
         },
         body: JSON.stringify({
           query,
-          client,
-          erp,
+          client: client === 'none' ? '' : client,
+          erp: erp === 'none' ? '' : erp,
           format,
           recentOnly,
           limit: parseInt(limit),
@@ -131,7 +132,7 @@ export default function Home() {
                       <SelectValue placeholder="Sélectionner un client" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous les clients</SelectItem>
+                    <SelectItem value="none">Tous les clients</SelectItem>
                       <SelectItem value="AZERGO">AZERGO</SelectItem>
                       <SelectItem value="ADVIGO">ADVIGO</SelectItem>
                       <SelectItem value="PUR PROJECT">PUR PROJECT</SelectItem>
@@ -148,7 +149,7 @@ export default function Home() {
                       <SelectValue placeholder="Sélectionner un ERP" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous les ERP</SelectItem>
+                      <SelectItem value="none">Tous les ERP</SelectItem>
                       <SelectItem value="SAP">SAP</SelectItem>
                       <SelectItem value="NetSuite">NetSuite</SelectItem>
                     </SelectContent>
@@ -217,34 +218,36 @@ export default function Home() {
           </Card>
         )}
 
-        {results.length > 0 && (
-          <Card className="results-section">
-            <div className="results-header">
-              <h2 className="results-count">Résultats ({results.length})</h2>
-              
-              {sources && (
-                <p className="results-sources">
-                  Sources: {sources}
-                </p>
-              )}
-            </div>
-
-            <div className="flex items-center mb-4">
-              {getFormatIcon()}
-              <span className="font-medium">Format: {format}</span>
-            </div>
-
-            <ScrollArea className="h-[500px] pr-4">
-              <div className="space-y-6">
-                {results.map((result, index) => (
-                  <Card key={index} className="result-card p-4">
-                    <div className="whitespace-pre-wrap">{result}</div>
-                  </Card>
-                ))}
+        <ErrorBoundary>
+          {results.length > 0 && (
+            <Card className="results-section">
+              <div className="results-header">
+                <h2 className="results-count">Résultats ({results.length})</h2>
+                
+                {sources && (
+                  <p className="results-sources">
+                    Sources: {sources}
+                  </p>
+                )}
               </div>
-            </ScrollArea>
-          </Card>
-        )}
+
+              <div className="flex items-center mb-4">
+                {getFormatIcon()}
+                <span className="font-medium">Format: {format}</span>
+              </div>
+
+              <ScrollArea className="h-[500px] pr-4">
+                <div className="space-y-6">
+                  {results.map((result, index) => (
+                    <Card key={index} className="result-card p-4">
+                      <div className="whitespace-pre-wrap">{result}</div>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </Card>
+          )}
+        </ErrorBoundary>
       </div>
     </main>
   )
