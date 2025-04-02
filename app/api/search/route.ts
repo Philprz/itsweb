@@ -336,7 +336,7 @@ function isQueryAmbiguous(query: string, clientName: string, erp: string): boole
 export async function POST(request: NextRequest) {
   try {
     const { query, client, erp, format, recentOnly, limit } = await request.json();
-    
+
     // Vérification des paramètres requis
     if (!query) {
       return NextResponse.json(
@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     // Vérification si la requête est ambiguë
     if (isQueryAmbiguous(query, client, erp)) {
       return NextResponse.json({
@@ -353,14 +353,14 @@ export async function POST(request: NextRequest) {
         sources: ""
       });
     }
-    
+
     // Récupération des collections prioritaires
     const prioritizedCollections = getPrioritizedCollections(client, erp);
-    
+
     // Recherche dans chaque collection
     const allResults = [];
     const collectionsUsed = [];
-    
+
     for (const collectionName of prioritizedCollections) {
       const results = await searchInCollection(
         collectionName,
@@ -369,23 +369,23 @@ export async function POST(request: NextRequest) {
         recentOnly,
         limit
       );
-      
+
       if (results.length > 0) {
         allResults.push(...results);
         collectionsUsed.push(collectionName);
-        
+
         // Si on a suffisamment de résultats, on s'arrête
         if (allResults.length >= limit) {
           break;
         }
       }
     }
-    
+
     // Formatage des résultats
     const formattedResults = allResults
       .slice(0, limit)
       .map(result => formatResponse(result, format));
-    
+
     // Création de la réponse finale
     return NextResponse.json({
       format,

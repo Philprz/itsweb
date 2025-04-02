@@ -34,6 +34,7 @@ export default function Home() {
     setError('')
 
     try {
+      console.log('Envoi de la requête:', { query, client, erp, format, recentOnly, limit: parseInt(limit) });
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: {
@@ -48,6 +49,7 @@ export default function Home() {
           limit: parseInt(limit),
         }),
       })
+      console.log('Statut de la réponse:', response.status);
 
       const data = await response.json()
 
