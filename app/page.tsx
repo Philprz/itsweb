@@ -60,8 +60,18 @@ export default function Home() {
   
       const data = await response.json();
       console.log('Données reçues:', data);
-  
-      setResults(data.content || []);
+      
+      // Vérifier la structure de la réponse et adapter le traitement
+      if (Array.isArray(data.content)) {
+        setResults(data.content);
+      } else if (data.content) {
+        setResults([data.content]);
+      } else if (Array.isArray(data)) {
+        setResults(data);
+      } else {
+        setResults([]);
+      }
+      
       setSources(data.sources || '');
       setSuggestions(data.suggestions || []);
     } catch (err: any) {

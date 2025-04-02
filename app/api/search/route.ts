@@ -109,6 +109,8 @@ async function searchInCollection(
     // Dans une implémentation réelle, nous utiliserions un modèle d'embedding
     const queryVector = Array(1536).fill(0).map(() => Math.random());
     
+    console.log(`Recherche dans ${collectionName} avec le filtre:`, JSON.stringify(searchFilter));
+    
     // Exécution de la recherche
     const searchResult = await client.search(
       COLLECTIONS[collectionName as keyof typeof COLLECTIONS],
@@ -118,6 +120,8 @@ async function searchInCollection(
         limit: limit
       }
     );
+    
+    console.log(`Résultats de la recherche dans ${collectionName}:`, searchResult.length);
     
     // Conversion des résultats
     return searchResult.map(result => result.payload);
@@ -331,110 +335,151 @@ function isQueryAmbiguous(query: string, clientName: string, erp: string): boole
 
 // Fonction pour traiter la requête via l'API Python
 async function processWithAPI(requestData: any) {
-  console.log('Envoi de la requête à l\'API Python:', requestData);
-  
-  // Transmettre la requête à l'API Python
-  const response = await fetch(`${API_URL}/api/search`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestData),
-  });
-  
-  if (!response.ok) {
-    console.error('Erreur API:', response.status, response.statusText);
-    const errorText = await response.text();
-    console.error('Détails de l\'erreur:', errorText);
-    throw new Error(`Erreur API: ${response.status} ${response.statusText}`);
+  try {
+    console.log(`Envoi de la requête à l'API ${API_URL}:`, requestData);
+    
+    const response = await fetch(`${API_URL}/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestData),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Erreur de l'API (${response.status}):`, errorText);
+      throw new Error(`Erreur de l'API: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('Réponse de l\'API:', data);
+    return data;
+  } catch (error) {
+    console.error('Erreur lors du traitement via l\'API:', error);
+    throw error;
   }
-  
-  const data = await response.json();
-  console.log('Réponse de l\'API Python:', data);
-  
-  return data;
 }
 
 // Gestionnaire de la route API
 export async function POST(request: NextRequest) {
+  console.log('Réception d\'une requête POST');
+  
   try {
+    // Récupération des données de la requête
     const requestData = await request.json();
+    console.log('Données reçues:', requestData);
     
-    // Si mode API est activé, on délègue tout à l'API Python
-    if (USE_API) {
-      const data = await processWithAPI(requestData);
-      return NextResponse.json(data);
-    }
+    const { query, client = "", erp = "", format = "Summary", recentOnly = false, limit = 5 } = requestData;
     
-    // Sinon, on utilise le traitement local avec Qdrant
-    const { query, client, erp, format, recentOnly, limit } = requestData;
-
-    // Vérification des paramètres requis
+    // Vérification de la présence de query
     if (!query) {
+      console.error('Requête manquante');
       return NextResponse.json(
-        { error: 'Le paramètre query est requis' },
+        { error: 'Requête de recherche requise' },
         { status: 400 }
       );
     }
-
-    // Vérification si la requête est ambiguë
-    if (isQueryAmbiguous(query, client, erp)) {
+    
+    // Traitement de la requête
+    const collections = getPrioritizedCollections(client, erp);
+    console.log('Collections prioritaires:', collections);
+    
+    // Déterminer si la requête est ambiguë
+    const isAmbiguous = isQueryAmbiguous(query, client, erp);
+    
+    // Si la requête est ambiguë, suggérer des modifications
+    if (isAmbiguous) {
+      console.log('Requête ambiguë détectée');
       return NextResponse.json({
-        format: "Clarification",
-        content: ["Votre requête est ambiguë. Pourriez-vous préciser pour quel ERP (SAP ou NetSuite) vous souhaitez des informations ?"],
-        sources: ""
+        content: [],
+        suggestions: [
+          "Essayez d'ajouter plus de détails à votre requête",
+          "Spécifiez un client ou un ERP pour des résultats plus pertinents",
+          "Essayez d'utiliser des termes plus spécifiques"
+        ]
       });
     }
-
-    // Récupération des collections prioritaires
-    const prioritizedCollections = getPrioritizedCollections(client, erp);
-
-    // Recherche dans chaque collection
-    const allResults = [];
-    const collectionsUsed = [];
-
-    for (const collectionName of prioritizedCollections) {
+    
+    let content = [];
+    let sources = '';
+    
+    // Si on utilise l'API Python
+    if (USE_API) {
+      console.log('Utilisation de l\'API Python');
+      try {
+        const apiResponse = await processWithAPI({
+          query,
+          client,
+          erp,
+          format,
+          recentOnly,
+          limit
+        });
+        
+        return NextResponse.json(apiResponse);
+      } catch (error) {
+        console.error('Erreur avec l\'API Python:', error);
+        // On continue avec la recherche locale en cas d'erreur API
+      }
+    }
+    
+    // Recherche locale dans Qdrant
+    console.log('Recherche locale dans Qdrant');
+    for (const collection of collections) {
       const results = await searchInCollection(
-        collectionName,
+        collection,
         query,
         client,
         recentOnly,
-        limit
+        Math.ceil(limit / collections.length)
       );
-
+      
       if (results.length > 0) {
-        allResults.push(...results);
-        collectionsUsed.push(collectionName);
-
+        // Ajout des résultats au contenu
+        content = content.concat(
+          results.map(result => formatResponse(result, format))
+        );
+        
+        // Ajout de la collection aux sources
+        if (sources) {
+          sources += ', ';
+        }
+        sources += collection;
+        
         // Si on a suffisamment de résultats, on s'arrête
-        if (allResults.length >= limit) {
+        if (content.length >= limit) {
+          content = content.slice(0, limit);
           break;
         }
       }
     }
-
-    // Formatage des résultats
-    const formattedResults = allResults
-      .slice(0, limit)
-      .map(result => formatResponse(result, format));
-
-    // Création de la réponse finale
+    
+    console.log(`Nombre de résultats trouvés: ${content.length}`);
+    
+    // Si aucun résultat, suggérer des modifications
+    if (content.length === 0) {
+      console.log('Aucun résultat trouvé, envoi de suggestions');
+      return NextResponse.json({
+        content: [],
+        suggestions: [
+          "Essayez d'utiliser des mots-clés différents",
+          "Vérifiez l'orthographe de votre requête",
+          "Essayez une requête plus générale",
+          "Si vous recherchez une information spécifique à un client, assurez-vous de spécifier son nom"
+        ]
+      });
+    }
+    
+    // Retourner les résultats
     return NextResponse.json({
-      format,
-      content: formattedResults,
-      sources: collectionsUsed.join(", ")
+      content,
+      sources
     });
   } catch (error: any) {
     console.error('Erreur lors du traitement de la requête:', error);
     return NextResponse.json(
-      {
-        error: error.message || 'Une erreur est survenue lors du traitement de la requête',
-        suggestions: [
-          "Vérifiez votre connexion internet",
-          "Essayez de rafraîchir la page",
-          "Réessayez dans quelques instants"
-        ]
-      },
+      { error: `Erreur interne: ${error.message}` },
       { status: 500 }
     );
   }
