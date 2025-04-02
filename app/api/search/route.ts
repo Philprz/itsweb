@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { QdrantClient } from 'qdrant-client';
+import { QdrantClient } from '@qdrant/js-client-rest';
 import { DateTime } from 'luxon';
 
 // Configuration Qdrant
@@ -15,31 +15,6 @@ const COLLECTIONS = {
 };
 // URL de l'API Python déployée sur Render
 const API_URL = process.env.API_URL || 'https://itshlp.onrender.com';
-export async function POST(request: NextRequest) {
-  try {
-    const requestData = await request.json();
-    
-    // Transmettre la requête à l'API Python
-    const response = await fetch(`${API_URL}/api/search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestData),
-    });
-    
-    const data = await response.json();
-    
-    // Retourner la réponse de l'API Python
-    return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('Erreur lors du traitement de la requête:', error);
-    return NextResponse.json(
-      { error: error.message || 'Une erreur est survenue lors du traitement de la requête' },
-      { status: 500 }
-    );
-  }
-}
 
 // Client Qdrant
 let qdrantClient: QdrantClient | null = null;
