@@ -155,7 +155,7 @@ export default function Home() {
                       <SelectValue placeholder="Sélectionner un ERP" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous les ERP</SelectItem>
+                      <SelectItem value="all">Tous les ERP</SelectItem>
                       <SelectItem value="SAP">SAP</SelectItem>
                       <SelectItem value="NetSuite">NetSuite</SelectItem>
                     </SelectContent>
