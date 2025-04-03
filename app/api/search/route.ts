@@ -105,9 +105,19 @@ async function searchInCollection(
       };
     }
     
-    // Simulation de vecteur d'embedding pour la requête
-    // Dans une implémentation réelle, nous utiliserions un modèle d'embedding
-    const queryVector = Array(1536).fill(0).map(() => Math.random());
+    // Génération d'embedding avec l'API OpenAI
+    const { Configuration, OpenAIApi } = require("openai");
+    const configuration = new Configuration({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+    const openai = new OpenAIApi(configuration);
+
+    // Génération de l'embedding avec le modèle text-embedding-ada-002
+    const response = await openai.createEmbedding({
+      model: "text-embedding-ada-002",
+      input: query,
+    });
+    const queryVector = response.data.data[0].embedding;
     
     console.log(`Recherche dans ${collectionName} avec le filtre:`, JSON.stringify(searchFilter));
     
