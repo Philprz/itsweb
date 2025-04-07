@@ -34,10 +34,10 @@ export default function Home() {
     }
     setIsLoading(true);
     setError('');
-  
+
     try {
       console.log('Envoi de la requête:', { query, client, erp, format, recentOnly, limit: parseInt(limit) });
-  
+
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: {
@@ -53,27 +53,47 @@ export default function Home() {
           raw,
         }),
       });
-  
+
       console.log('Statut de la réponse:', response.status);
-  
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Erreur de réponse:', errorText);
         throw new Error(`Erreur: ${response.status} ${response.statusText}`);
       }
-  
+
       const data = await response.json();
       console.log('Données reçues:', data);
       
-      // Vérifier la structure de la réponse et adapter le traitement
-      if (Array.isArray(data.content)) {
-        setResults(data.content);
-      } else if (data.content) {
-        setResults([data.content]);
-      } else if (Array.isArray(data)) {
-        setResults(data);
+      // Traitement optimisé des données de l'API
+      if (raw) {
+        // Mode développeur: on attend des objets structurés
+        if (Array.isArray(data.content)) {
+          setResults(data.content);
+        } else if (data.content) {
+          setResults([data.content]);
+        } else if (Array.isArray(data)) {
+          setResults(data);
+        } else {
+          setResults([]);
+        }
       } else {
-        setResults([]);
+        // Mode normal: on traite des chaînes de texte
+        if (Array.isArray(data.content)) {
+          // Contenu est déjà un tableau
+          setResults(data.content);
+        } else if (typeof data.content === 'string') {
+          // Contenu est une chaîne unique
+          setResults([data.content]);
+        } else if (Array.isArray(data)) {
+          // Réponse est directement un tableau
+          setResults(data);
+        } else if (data.content && typeof data.content === 'object') {
+          // Contenu est un objet - conversion en chaîne JSON
+          setResults([JSON.stringify(data.content)]);
+        } else {
+          setResults([]);
+        }
       }
       
       setSources(data.sources || '');
@@ -261,25 +281,30 @@ export default function Home() {
           <Card className="results-section">
             <div className="results-header">
               <h2 className="results-count">Résultats ({results.length})</h2>
-  
               {sources && (
                 <p className="results-sources">
                   Sources: {sources}
                 </p>
               )}
             </div>
-  
+
             <div className="flex items-center mb-4">
               {getFormatIcon()}
               <span className="font-medium">Format: {format}</span>
             </div>
-  
+
             <ScrollArea className="h-[500px] pr-4">
               <div className="space-y-6">
               {results.map((result, index) => (
                 <Card key={index} className="result-card p-4">
                   {raw ? (
-                    <RawResultCard result={result} />
+                    typeof result === 'object' ? (
+                      <RawResultCard result={result} />
+                    ) : (
+                      <div className="whitespace-pre-wrap">
+                        Format incorrect pour le mode développeur: {typeof result}
+                      </div>
+                    )
                   ) : (
                     <div className="whitespace-pre-wrap">{result}</div>
                   )}
