@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import RawResultCard from '@/components/RawResultCard'
+import { Badge } from '@/components/ui/badge'
 
 export default function Home() {
   const [query, setQuery] = useState('')
@@ -18,6 +20,7 @@ export default function Home() {
   const [erp, setErp] = useState('')
   const [format, setFormat] = useState('Summary')
   const [recentOnly, setRecentOnly] = useState(true)
+  const [raw, setRaw] = useState(false)
   const [limit, setLimit] = useState('5')
   const [results, setResults] = useState<any[]>([])
   const [sources, setSources] = useState('')
@@ -47,6 +50,7 @@ export default function Home() {
           format,
           recentOnly,
           limit: parseInt(limit),
+          raw,
         }),
       });
   
@@ -223,6 +227,14 @@ export default function Home() {
                   />
                   <Label htmlFor="recentOnly">Résultats récents uniquement (moins de 6 mois)</Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="raw"
+                    checked={raw}
+                    onCheckedChange={(checked) => setRaw(checked as boolean)}
+                  />
+                  <Label htmlFor="raw">Mode développeur (raw = true)</Label>
+                </div>
               </div>
             </div>
           </div>
@@ -264,11 +276,15 @@ export default function Home() {
   
             <ScrollArea className="h-[500px] pr-4">
               <div className="space-y-6">
-                {results.map((result, index) => (
-                  <Card key={index} className="result-card p-4">
+              {results.map((result, index) => (
+                <Card key={index} className="result-card p-4">
+                  {raw ? (
+                    <RawResultCard result={result} />
+                  ) : (
                     <div className="whitespace-pre-wrap">{result}</div>
-                  </Card>
-                ))}
+                  )}
+                </Card>
+              ))}
               </div>
             </ScrollArea>
           </Card>
