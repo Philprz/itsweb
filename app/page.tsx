@@ -9,10 +9,12 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import RawResultCard from '@/components/RawResultCard'
-import { Badge } from '@/components/ui/badge'
+import GptResultCard from '@/components/GptResultCard'
+import DetailResultCard from '@/components/DetailResultCard'
+import MetaBadge from '@/components/MetaBadge'
+import LoaderMessage from '@/components/LoaderMessage'
+import SummaryCard from '@/components/SummaryCard'
+import Image from 'next/image';
 
 export default function Home() {
   const [query, setQuery] = useState('')
@@ -26,6 +28,8 @@ export default function Home() {
   const [sources, setSources] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [meta, setMeta] = useState<any>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
 
   const handleSearch = async () => {
     if (!query) {
@@ -64,7 +68,7 @@ export default function Home() {
 
       const data = await response.json();
       console.log('Données reçues:', data);
-      
+
       // Traitement optimisé des données de l'API
       if (raw) {
         // Mode développeur: on attend des objets structurés
@@ -95,8 +99,9 @@ export default function Home() {
           setResults([]);
         }
       }
-      
+
       setSources(data.sources || '');
+      setMeta(data.meta || null);
       setSuggestions(data.suggestions || []);
     } catch (err: any) {
       console.error('Erreur complète:', err);
@@ -108,9 +113,6 @@ export default function Home() {
       setIsLoading(false);
     }
   };
-  // Ajouter un nouvel état pour les suggestions
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -133,11 +135,25 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col">
-      <header className="app-header">
-        <h1 className="app-title">IT SPIRIT - Système d'Information Qdrant</h1>
-        <p className="app-subtitle">Recherchez des informations sur les clients et les systèmes ERP (SAP et NetSuite)</p>
+      <header className="bg-white dark:bg-gray-900 shadow-sm py-4 px-6 flex items-center justify-between rounded-b-lg border-b">
+        <div className="flex items-center space-x-4">
+          <Image
+            src="/it_spirit_logo.jfif"
+            alt="Logo ITSpirit"
+            width={48}
+            height={48}
+            className="rounded-md"
+            priority
+          />
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">IT SPIRIT</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-300">
+              ITS Help
+            </p>
+          </div>
+        </div>
       </header>
-  
+
       <div className="p-4 sm:p-8">
         <Card className="search-form p-6 mb-8">
           <div className="grid gap-6">
@@ -153,21 +169,12 @@ export default function Home() {
                   className="text-base"
                 />
                 <Button onClick={handleSearch} disabled={isLoading} className="search-button">
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="loading-spinner" />
-                      Recherche...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-2" />
-                      Rechercher
-                    </>
-                  )}
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                  Rechercher
                 </Button>
               </div>
             </div>
-  
+
             <div className="filter-section">
               <h3 className="text-md font-medium mb-3">Filtres</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 filter-grid">
@@ -181,7 +188,7 @@ export default function Home() {
                     className="text-base"
                   />
                 </div>
-  
+
                 <div>
                   <Label htmlFor="erp">ERP (optionnel)</Label>
                   <Select value={erp} onValueChange={setErp}>
@@ -195,7 +202,7 @@ export default function Home() {
                     </SelectContent>
                   </Select>
                 </div>
-  
+
                 <div>
                   <Label htmlFor="limit">Nombre de résultats</Label>
                   <Select value={limit} onValueChange={setLimit}>
@@ -210,7 +217,7 @@ export default function Home() {
                   </Select>
                 </div>
               </div>
-  
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div>
                   <Label className="mb-2 block">Format de réponse</Label>
@@ -238,7 +245,7 @@ export default function Home() {
                     </div>
                   </RadioGroup>
                 </div>
-  
+
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="recentOnly"
@@ -259,13 +266,19 @@ export default function Home() {
             </div>
           </div>
         </Card>
-  
+
+        {isLoading && (
+          <Card className="mb-8">
+            <LoaderMessage />
+          </Card>
+        )}
+
         {error && (
-          <Card className="error-message mb-8">
+          <Card className="error-message p-4 mb-8">
             <p>{error}</p>
           </Card>
         )}
-  
+
         {results.length === 0 && suggestions.length > 0 && (
           <Card className="suggestions-section p-4 mb-8">
             <h2 className="text-lg font-medium mb-2">Suggestions pour améliorer votre recherche</h2>
@@ -276,9 +289,9 @@ export default function Home() {
             </ul>
           </Card>
         )}
-  
+
         {results.length > 0 && (
-          <Card className="results-section">
+          <Card className="results-section p-4">
             <div className="results-header">
               <h2 className="results-count">Résultats ({results.length})</h2>
               {sources && (
@@ -293,25 +306,24 @@ export default function Home() {
               <span className="font-medium">Format: {format}</span>
             </div>
 
-            <ScrollArea className="h-[500px] pr-4">
-              <div className="space-y-6">
-              {results.map((result, index) => (
-                <Card key={index} className="result-card p-4">
-                  {raw ? (
-                    typeof result === 'object' ? (
-                      <RawResultCard result={result} />
-                    ) : (
-                      <div className="whitespace-pre-wrap">
-                        Format incorrect pour le mode développeur: {typeof result}
-                      </div>
-                    )
-                  ) : (
-                    <div className="whitespace-pre-wrap">{result}</div>
-                  )}
-                </Card>
-              ))}
-              </div>
-            </ScrollArea>
+            {meta && <MetaBadge meta={meta} />}
+
+            <ScrollArea className="h-[400px]">
+  {format === 'Summary' && results.map((result, index) => (
+  <SummaryCard
+    key={index}
+    content={result}
+    format={format as 'Summary' | 'Guide'}
+    isGpt={meta?.mode === 'deepresearch'}
+  />
+))}
+  {format === 'Detail' && results.map((result, index) => (
+    <DetailResultCard key={index} result={result} />
+  ))}
+  {format === 'Guide' && results.map((result, index) => (
+    <GptResultCard key={index} content={result} />
+  ))}
+</ScrollArea>
           </Card>
         )}
       </div>
