@@ -1,20 +1,91 @@
 'use client'
+import { useEffect, useState } from 'react'
+import Image from 'next/image'
+import { Search, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Search, Loader2, Database, FileText, BookOpen } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import GptResultCard from '@/components/GptResultCard'
 import DetailResultCard from '@/components/DetailResultCard'
 import MetaBadge from '@/components/MetaBadge'
 import LoaderMessage from '@/components/LoaderMessage'
 import SummaryCard from '@/components/SummaryCard'
-import Image from 'next/image';
+
+function SearchFilters({ client, setClient, clients, erp, setErp, format, setFormat, recentOnly, setRecentOnly, limit, setLimit }) {
+  return (
+    <div className="filter-grid grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <Label htmlFor="erp" className="text-sm font-medium">ERP</Label>
+        <Select value={erp || 'none'} onValueChange={(v) => setErp(v === 'none' ? '' : v)}>
+          <SelectTrigger className="w-full mt-1">
+            <SelectValue placeholder="ERP utilisé..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Aucun</SelectItem>
+            <SelectItem value="SAP">SAP</SelectItem>
+            <SelectItem value="NetSuite">NetSuite</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="format" className="text-sm font-medium">Format de réponse</Label>
+        <Select value={format} onValueChange={setFormat}>
+          <SelectTrigger className="w-full mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Summary">Résumé</SelectItem>
+            <SelectItem value="Detail">Détail</SelectItem>
+            <SelectItem value="Guide">Guide</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="limit" className="text-sm font-medium">Nombre de résultats</Label>
+        <Select value={limit} onValueChange={setLimit}>
+          <SelectTrigger className="w-full mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="3">3</SelectItem>
+            <SelectItem value="5">5</SelectItem>
+            <SelectItem value="10">10</SelectItem>
+            <SelectItem value="20">20</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="col-span-1 sm:col-span-3 flex items-center space-x-2 mt-2">
+        <Checkbox id="recentOnly" checked={recentOnly} onCheckedChange={(checked) => setRecentOnly(!!checked)} />
+        <Label htmlFor="recentOnly" className="text-sm font-medium">
+          Afficher uniquement les tickets récents (moins de 6 mois)
+        </Label>
+      </div>
+
+      <div className="col-span-1 sm:col-span-3 mt-4">
+        <Button
+          variant="secondary"
+          className="w-full"
+          onClick={() => {
+            setClient('')
+            setErp('')
+            setFormat('Summary')
+            setRecentOnly(true)
+            setLimit('5')
+          }}
+        >
+          🔄 Réinitialiser les filtres
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const [query, setQuery] = useState('')
@@ -23,14 +94,12 @@ export default function Home() {
   const [erp, setErp] = useState('')
   const [format, setFormat] = useState('Summary')
   const [recentOnly, setRecentOnly] = useState(true)
-  const [raw, setRaw] = useState(false)
   const [limit, setLimit] = useState('5')
   const [results, setResults] = useState<any[]>([])
   const [sources, setSources] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [meta, setMeta] = useState<any>(null)
-  const [suggestions, setSuggestions] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
@@ -64,7 +133,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query, client, erp, format, recentOnly, limit: parseInt(limit), raw }),
+        body: JSON.stringify({ query, client, erp, format, recentOnly, limit: parseInt(limit) }),
       });
 
       const data = await response.json();
@@ -73,12 +142,10 @@ export default function Home() {
       setResults(Array.isArray(content) ? content : [content]);
       setSources(data.sources || '');
       setMeta(data.meta || null);
-      setSuggestions(data.suggestions || []);
     } catch (err: any) {
       setError(err.message);
       setResults([]);
       setSources('');
-      setSuggestions([]);
     } finally {
       setIsLoading(false);
     }
@@ -108,9 +175,13 @@ export default function Home() {
           </Button>
 
           {showFilters && (
-            <div className="filter-section mt-4">
-              {/* Filtres client, ERP, format, etc. */}
-            </div>
+            <SearchFilters
+              client={client} setClient={setClient} clients={clients}
+              erp={erp} setErp={setErp}
+              format={format} setFormat={setFormat}
+              recentOnly={recentOnly} setRecentOnly={setRecentOnly}
+              limit={limit} setLimit={setLimit}
+            />
           )}
         </Card>
 
@@ -124,6 +195,18 @@ export default function Home() {
               {sources && <p className="results-sources">Sources: {sources}</p>}
             </div>
 
+            {recentOnly && (
+              <p className="text-sm text-green-700 dark:text-green-300 italic mb-2">
+                ✅ Filtrage activé : tickets créés il y a moins de 6 mois
+              </p>
+            )}
+
+            <p className="text-sm text-gray-700 dark:text-gray-300 italic mb-2">
+              🛠️ Format sélectionné : <strong>
+                {format === 'Summary' ? 'Résumé global' : format === 'Detail' ? 'Affichage détaillé' : 'Guide pratique'}
+              </strong>
+            </p>
+
             {meta && <MetaBadge meta={meta} />}
 
             <ScrollArea className="h-[400px]">
@@ -132,14 +215,14 @@ export default function Home() {
               {format === 'Guide' && results.map((r, i) => <GptResultCard key={i} content={r} />)}
             </ScrollArea>
 
-            <div className="question-client-block">
+            <div className="question-client-block mt-4">
               <p className="text-sm font-medium mb-2">Est-ce que votre question porte sur un client en particulier ?</p>
-              <Select value={client} onValueChange={setClient}>
+              <Select value={client || 'none'} onValueChange={(v) => setClient(v === 'none' ? '' : v)}>
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Sélectionner un client" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Aucun</SelectItem>
+                  <SelectItem value="none">Aucun</SelectItem>
                   {clients.map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
