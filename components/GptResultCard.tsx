@@ -1,10 +1,13 @@
+// --- GPT RESULT CARD ---
 'use client'
 
 import { Card } from '@/components/ui/card';
-import { useState } from 'react';
-
+import { useEffect, useState } from 'react';
+import useCharLimit from '@/hooks/useCharLimit'
 export default function GptResultCard({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
+  const [expand, setExpand] = useState(false);
+  const charLimit = useCharLimit();
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
@@ -23,7 +26,16 @@ export default function GptResultCard({ content }: { content: string }) {
           {copied ? '✅ Copié !' : '📝 Copier'}
         </button>
       </div>
-      <div className="text-sm whitespace-pre-wrap text-gray-800">{content}</div>
+      <div className="text-sm whitespace-pre-wrap text-gray-800">
+        {expand || content.length <= charLimit
+          ? content
+          : content.slice(0, charLimit) + '...'}
+        {content.length > charLimit && !expand && (
+          <button onClick={() => setExpand(true)} className="text-xs text-blue-600 hover:underline ml-2">
+            Afficher plus
+          </button>
+        )}
+      </div>
     </Card>
   );
 }

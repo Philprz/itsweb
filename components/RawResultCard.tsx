@@ -1,8 +1,11 @@
-// components/RawResultCard.tsx
+// --- RAW RESULT CARD ---
+'use client'
+
 import { Card } from "@/components/ui/card"
 import { Badge } from "./ui/badge"
 import { ExternalLink } from "lucide-react"
-
+import { useEffect, useState } from "react"
+import useCharLimit from '@/hooks/useCharLimit'
 type RawResult = {
   summary: string
   description?: string
@@ -22,6 +25,10 @@ function getScoreColor(score: number) {
 }
 
 export default function RawResultCard({ result }: { result: RawResult }) {
+  const [expand, setExpand] = useState(false);
+  const charLimit = useCharLimit();
+
+
   return (
     <Card className="p-4 space-y-2 result-card">
       <div className="flex justify-between items-center">
@@ -32,7 +39,16 @@ export default function RawResultCard({ result }: { result: RawResult }) {
       </div>
 
       {result.description && (
-        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{result.description}</p>
+        <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+          {expand || result.description.length <= charLimit
+            ? result.description
+            : result.description.slice(0, charLimit) + '...'}
+          {result.description.length > charLimit && !expand && (
+            <button onClick={() => setExpand(true)} className="text-xs text-blue-600 hover:underline ml-2">
+              Afficher plus
+            </button>
+          )}
+        </div>
       )}
 
       <div className="text-sm text-muted-foreground grid gap-1">
@@ -53,5 +69,5 @@ export default function RawResultCard({ result }: { result: RawResult }) {
         </a>
       )}
     </Card>
-  )
+  );
 }
