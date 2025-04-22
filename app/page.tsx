@@ -101,7 +101,34 @@ export default function Home() {
   const [error, setError] = useState('')
   const [meta, setMeta] = useState<any>(null)
   const [showFilters, setShowFilters] = useState(false)
-
+  useEffect(() => {
+    if (meta?.partial) {
+      const interval = setInterval(async () => {
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query, client, erp, format, recentOnly, limit: parseInt(limit) }),
+        });
+  
+        const data = await response.json();
+        const isStillPartial = data.meta?.partial;
+  
+        // Dès qu'on a une version enrichie, on met à jour
+        if (!isStillPartial) {
+          setResults(Array.isArray(data.content) ? data.content : [data.content]);
+          setSources(data.sources || '');
+          setMeta(data.meta || null);
+          clearInterval(interval);
+          console.log("✅ Version enrichie récupérée automatiquement.");
+        }
+      }, 5000); // toutes les 5 sec
+  
+      return () => clearInterval(interval); // nettoyage
+    }
+  }, [meta]);
+  
   useEffect(() => {
     const fetchClients = async () => {
       try {
@@ -115,7 +142,6 @@ export default function Home() {
         console.error('Erreur chargement clients', err)
       }
     }
-
     fetchClients()
   }, [])
 
@@ -138,6 +164,7 @@ export default function Home() {
 
       const data = await response.json();
       const content = data.content;
+      const isPartial = data.meta?.partial;
 
       setResults(Array.isArray(content) ? content : [content]);
       setSources(data.sources || '');
@@ -210,13 +237,14 @@ export default function Home() {
             {meta && <MetaBadge meta={meta} />}
 
             <ScrollArea className="h-[400px]">
-              {format === 'Summary' && results.map((r, i) => <SummaryCard key={i} content={r} format={format} isGpt={meta?.mode === 'deepresearch'} />)}
-              {format === 'Detail' && results.map((r, i) => <DetailResultCard key={i} result={r} />)}
-              {format === 'Guide' && results.map((r, i) => <GptResultCard key={i} content={r} />)}
+              {meta?.partial && results.map((r, i) => <GptResultCard key={i} content={r} />)}
+              {!meta?.partial && format === 'Summary' && results.map((r, i) => <SummaryCard key={i} content={r} format={format} isGpt={meta?.mode === 'deepresearch'} />)}
+              {!meta?.partial && format === 'Detail' && results.map((r, i) => <DetailResultCard key={i} result={r} />)}
+              {!meta?.partial && format === 'Guide' && results.map((r, i) => <GptResultCard key={i} content={r} />)}
             </ScrollArea>
 
-            <div className="question-client-block mt-4">
-              <p className="text-sm font-medium mb-2">Est-ce que votre question porte sur un client en particulier ?</p>
+            <div className="question-client-block mt-4 space-y-2">
+              <p className="text-sm font-medium">Est-ce que votre question porte sur un client en particulier ?</p>
               <Select value={client || 'none'} onValueChange={(v) => setClient(v === 'none' ? '' : v)}>
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Sélectionner un client" />
@@ -228,6 +256,7 @@ export default function Home() {
                   ))}
                 </SelectContent>
               </Select>
+              <Button variant="secondary" size="sm" onClick={handleSearch}>🔁 Relancer avec ce client</Button>
             </div>
           </Card>
         )}
