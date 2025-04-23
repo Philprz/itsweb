@@ -15,9 +15,24 @@ import MetaBadge from '@/components/MetaBadge'
 import LoaderMessage from '@/components/LoaderMessage'
 import SummaryCard from '@/components/SummaryCard'
 
-function SearchFilters({ client, setClient, clients, erp, setErp, format, setFormat, recentOnly, setRecentOnly, limit, setLimit }) {
+function SearchFilters({ client, setClient, clients, erp, setErp, format, setFormat, recentOnly, setRecentOnly, limit, setLimit, setQuery, setResults, setSources, setMeta }) {
   return (
     <div className="filter-grid grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <Label htmlFor="client" className="text-sm font-medium">Client</Label>
+        <Select value={client || 'none'} onValueChange={(v) => setClient(v === 'none' ? '' : v)}>
+          <SelectTrigger className="w-full mt-1">
+            <SelectValue placeholder="Sélectionner un client..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Aucun</SelectItem>
+            {clients.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div>
         <Label htmlFor="erp" className="text-sm font-medium">ERP</Label>
         <Select value={erp || 'none'} onValueChange={(v) => setErp(v === 'none' ? '' : v)}>
@@ -78,6 +93,10 @@ function SearchFilters({ client, setClient, clients, erp, setErp, format, setFor
             setFormat('Summary')
             setRecentOnly(true)
             setLimit('5')
+            setQuery('')
+            setResults([]);
+            setSources('');
+            setMeta(null);
           }}
         >
           🔄 Réinitialiser les filtres
@@ -150,6 +169,10 @@ export default function Home() {
       setError('Veuillez entrer une requête de recherche');
       return;
     }
+    // 💡 Reset des anciens résultats avant le chargement
+    setResults([]);        // Supprime les résultats précédents
+    setSources('');        // Supprime les sources
+    setMeta(null);         // Supprime les métadonnées
     setIsLoading(true);
     setError('');
 
@@ -172,6 +195,7 @@ export default function Home() {
     } catch (err: any) {
       setError(err.message);
       setResults([]);
+      setQuery('');
       setSources('');
     } finally {
       setIsLoading(false);
@@ -208,6 +232,10 @@ export default function Home() {
               format={format} setFormat={setFormat}
               recentOnly={recentOnly} setRecentOnly={setRecentOnly}
               limit={limit} setLimit={setLimit}
+              setQuery={setQuery}
+              setResults={setResults}
+              setSources={setSources}
+              setMeta={setMeta}
             />
           )}
         </Card>
@@ -215,7 +243,7 @@ export default function Home() {
         {isLoading && <Card className="mb-8"><LoaderMessage /></Card>}
         {error && <Card className="error-message p-4 mb-8"><p>{error}</p></Card>}
 
-        {results.length > 0 && (
+        {!isLoading && results.length > 0 && (
           <Card className="results-section p-4">
             <div className="results-header">
               <h2 className="results-count">Résultats ({results.length})</h2>
